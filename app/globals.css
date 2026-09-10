@@ -8,3 +8,17 @@
 
 /* A hover preview must not steal the pointer from the inspected surface. */
 .label-popup[data-preview="true"]{pointer-events:none}
+
+/* Compact anatomy labels: preserve body readability and scroll longer explanations. */
+.label-popup,.has-label .label-popup {
+  width: min(300px, calc(100vw - 32px));
+  max-height: min(380px, calc(100svh - 176px));
+  padding: 16px 18px;
+}
+.label-popup h2 { font-size: 24px; margin-bottom: 7px; }
+.label-id { margin-top: 12px; margin-bottom: 6px; }
+.label-popup p { line-height: 1.45; }
+.function-label { margin-bottom: 10px; }
+.relation { margin: 12px 0; padding-top: 12px; }
+.remember { margin-bottom: 12px; }
+.label-foot { padding-top: 10px; }

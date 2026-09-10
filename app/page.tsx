@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Popover, PopoverContent, PopoverTitle, PopoverDescription, PopoverTrigger } from '@/components/ui/popover';
 import { buildNeuron } from '../lib/neuron-model';
-import { activePart, labelPosition } from '../lib/label-layout';
+import { activePart, labelPosition, minimumCameraDistance } from '../lib/label-layout';
 import { createHoverPreview } from '../lib/hover-preview';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -24,12 +24,17 @@ function Neuron({hoverActive,selected,onSelect,onHover,anchor,lockedAnchor,conne
  useEffect(()=>{if(!host.current)return;const el=host.current;let renderer:THREE.WebGLRenderer;try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});}catch{setError(true);return;}
  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
  renderer.setPixelRatio(Math.min(devicePixelRatio,2));el.appendChild(renderer.domElement);renderer.domElement.setAttribute('aria-label','Rotatable 3D neuron. Drag to rotate, scroll to zoom, or select a structure.');
- const scene=new THREE.Scene();const camera=new THREE.PerspectiveCamera(38,1,.1,100);camera.position.set(0,0,23);const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.enablePan=false;controls.minDistance=12;controls.maxDistance=65;controls.target.set(.3,0,0);
+ const scene=new THREE.Scene();const camera=new THREE.PerspectiveCamera(38,1,.1,500);camera.position.set(0,0,23);const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.enablePan=false;controls.minDistance=12;controls.maxDistance=65;controls.target.set(.3,0,0);
  scene.add(new THREE.HemisphereLight(0xc4e7e2,0x1c171f,1.3));
  const light=new THREE.DirectionalLight(0xffe5cd,3.5);light.position.set(-3,6,8);scene.add(light);
  const rim=new THREE.DirectionalLight(0x8fd3d6,2.4);rim.position.set(3,1,-5);scene.add(rim);
  const fill=new THREE.DirectionalLight(0xc9c5ed,.8);fill.position.set(-5,-3,4);scene.add(fill);
  const model=buildNeuron(parts.map(p=>p.color));const {group,meshes}=model;scene.add(group);
+ const modelBox=new THREE.Box3().setFromObject(group);
+ const sphere=modelBox.getBoundingSphere(new THREE.Sphere());
+ const framingRadius=sphere.radius+sphere.center.distanceTo(controls.target);
+ const modelCorners:THREE.Vector3[]=[];
+ for(const x of [modelBox.min.x,modelBox.max.x])for(const y of [modelBox.min.y,modelBox.max.y])for(const z of [modelBox.min.z,modelBox.max.z])modelCorners.push(new THREE.Vector3(x,y,z));
  const ray=new THREE.Raycaster();const pointer=new THREE.Vector2();let down=[0,0];let dragging=false;
  const hover=createHoverPreview(onHover);
  const hitAt=(e:PointerEvent)=>{const b=el.getBoundingClientRect();pointer.set((e.clientX-b.left)/b.width*2-1,-(e.clientY-b.top)/b.height*2+1);ray.setFromCamera(pointer,camera);const hits=ray.intersectObjects(meshes);return hits[0]?.object.userData.part===1?(hits.find(h=>h.object.userData.part===2)??hits[0]):hits[0];};
@@ -39,9 +44,11 @@ function Neuron({hoverActive,selected,onSelect,onHover,anchor,lockedAnchor,conne
  const move=(e:PointerEvent)=>{if(e.pointerType==='touch'||dragging){hover.cancel();return;}const hit=hitAt(e);renderer.domElement.style.cursor=hit?'pointer':'grab';if(hit)remember(hit);hover.move(hit?hit.object.userData.part:null);};
  const leave=()=>{dragging=false;hover.cancel();};const cancel=()=>hover.cancel();
  renderer.domElement.addEventListener('pointerdown',start);renderer.domElement.addEventListener('pointerup',pick);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerleave',leave);renderer.domElement.addEventListener('pointercancel',leave);renderer.domElement.addEventListener('wheel',cancel);
- api.current={reset:()=>{camera.position.set(.3,0,fitDistance);controls.target.set(.3,0,0);controls.update();},zoom:(n)=>{camera.position.sub(controls.target).multiplyScalar(n).clampLength(12,65).add(controls.target);controls.update();}};
+ api.current={reset:()=>{camera.position.set(.3,0,fitDistance);controls.target.set(.3,0,0);controls.update();},zoom:(n)=>{camera.position.sub(controls.target).multiplyScalar(n).clampLength(controls.minDistance,controls.maxDistance).add(controls.target);controls.update();}};
  let fitDistance=23;
- const resize=()=>{const w=el.clientWidth,h=el.clientHeight;if(!w||!h)return;renderer.setSize(w,h);camera.aspect=w/h;const nextFit=Math.max(23,Math.min(55,23/camera.aspect));camera.position.sub(controls.target).multiplyScalar(nextFit/fitDistance).add(controls.target);fitDistance=nextFit;camera.updateProjectionMatrix();};const observer=new ResizeObserver(resize);observer.observe(el);resize();let frame=0;const animate=()=>{frame=requestAnimationFrame(animate);controls.update();meshes.forEach(m=>{const mat=m.material as THREE.MeshStandardMaterial;mat.emissive.set(m.userData.part===selection.current?parts[selection.current ?? 0].color:'#000000');mat.emissiveIntensity=m.userData.part===selection.current?.1:0;});renderer.render(scene,camera);
+ const resize=()=>{const w=el.clientWidth,h=el.clientHeight;if(!w||!h)return;renderer.setSize(w,h);camera.aspect=w/h;controls.minDistance=minimumCameraDistance(framingRadius,camera.fov,camera.aspect);
+ controls.maxDistance=controls.minDistance*2.5;
+ const nextFit=controls.minDistance*1.08;camera.position.sub(controls.target).multiplyScalar(nextFit/fitDistance).clampLength(controls.minDistance,controls.maxDistance).add(controls.target);fitDistance=nextFit;camera.updateProjectionMatrix();};const observer=new ResizeObserver(resize);observer.observe(el);resize();let frame=0;const animate=()=>{frame=requestAnimationFrame(animate);controls.update();meshes.forEach(m=>{const mat=m.material as THREE.MeshStandardMaterial;mat.emissive.set(m.userData.part===selection.current?parts[selection.current ?? 0].color:'#000000');mat.emissiveIntensity=m.userData.part===selection.current?.1:0;});renderer.render(scene,camera);
  const svg=connector.current;const label=popup.current;const chosen=selection.current;
  if(svg&&label&&chosen!==null){
    const defaults=[[-4.7,1.4,0],[-3,0,.8],[-3,.04,.64],[-1.65,-.35,0],[4.85,-.9,.1],[1.7,-.65,.15],[1.2,-.58,.02],[6.3,-1,.2]];
@@ -50,7 +57,9 @@ function Neuron({hoverActive,selected,onSelect,onHover,anchor,lockedAnchor,conne
    point.applyMatrix4(group.matrixWorld).project(camera);
    const bounds=el.getBoundingClientRect(), root=svg.getBoundingClientRect();
    const x=(point.x+1)/2*bounds.width+bounds.left-root.left, y=(1-point.y)/2*bounds.height+bounds.top-root.top;
-   const placement=labelPosition(x,y,bounds.width,bounds.height,label.offsetWidth,label.offsetHeight);
+   const projected=modelCorners.map(c=>c.clone().project(camera));
+   const projectedBounds={left:Math.min(...projected.map(c=>(c.x+1)/2*bounds.width)),right:Math.max(...projected.map(c=>(c.x+1)/2*bounds.width)),top:Math.min(...projected.map(c=>(1-c.y)/2*bounds.height)),bottom:Math.max(...projected.map(c=>(1-c.y)/2*bounds.height))};
+   const placement=labelPosition(x,y,bounds.width,bounds.height,label.offsetWidth,label.offsetHeight,projectedBounds);
    label.style.left=`${placement.left}px`;label.style.top=`${placement.top}px`;
    const visible=point.z>-1&&point.z<1&&x>=0&&x<=bounds.width&&y>=0&&y<=bounds.height;
    svg.style.visibility=visible?'visible':'hidden';

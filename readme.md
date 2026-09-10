@@ -146,3 +146,11 @@ pnpm build
 This is an illustrative multipolar neuron with organic surface detail, dendritic spines, and layered myelin, not a microscope reconstruction of a specific cell. Colors distinguish structures, sizes are not to scale, and the soma is translucent to reveal the nucleus. Neuron shapes and myelination vary across the nervous system.
 
 Reference: [Nerve Cells — Neuroscience, NCBI Bookshelf](https://www.ncbi.nlm.nih.gov/books/NBK11103/).
+
+## Adjust popup placement and zoom limits
+
+`lib/label-layout.ts` contains the main settings. `LABEL_LAYOUT.gap` is the pixel gap from the projected model edge. Placement compares eight candidates (left, right, above, below, and four diagonals), preferring positions with less overlap and keeping the label inside the HUD margins. On small screens some overlap may remain.
+
+`MAX_MODEL_SCREEN_FRACTION = 0.78` limits the model's bounding sphere to 78% of the tighter viewport dimension at maximum zoom. Raising it permits a larger model; lowering it leaves more surrounding space. `minimumCameraDistance()` accounts for the camera field of view and screen aspect ratio. In `app/page.tsx`, both the scroll/pinch controls and the +/− buttons use this same minimum distance. Resizing recalculates it.
+
+The compact-label rules at the end of `app/globals.css` set the popup width to 300px and maximum height to 380px (smaller when required by the screen). Longer text scrolls inside a pinned popup. Main paragraph text stays at 16px.
