@@ -100,9 +100,9 @@ To stop the local server, click the terminal window and press **Ctrl + C** (also
 - **Reset:** Use the circular-arrow button.
 - **Preview a label:** Hold the mouse still over a structure for 1.5 seconds. Moving the cursor dismisses the preview and starts a fresh delay if it is still over a structure.
 - **Pin a label:** Click or tap a structure. Its label stays visible when the cursor moves, and its leader line follows the selected location as you rotate the model.
-- **Change target:** Click another structure, or select its name in the Structure Index. A pinned label takes priority over hover previews.
+- **Change target:** Click another structure, or open **Structure index** in the top-right corner and select its name. The menu closes after selection. A pinned label takes priority over hover previews.
 - **Close a label:** Click its X button or press Escape.
-- **Keyboard:** Tab through the structure buttons and press Enter or Space to pin a label. Touch and keyboard users do not need hover.
+- **Keyboard:** Tab to the Structure index button and press Enter or Space to open it. Tab through its structure buttons and press Enter or Space to pin a label. Escape closes an open index; when it is closed, Escape clears the anatomy label. Touch and keyboard users do not need hover.
 
 On narrow screens, the label appears below the model, with a connecting line. On larger screens, it appears in a reserved area beside the model. The label does not cover the neuron. If the selected point goes out of view, its connecting line is hidden until the point returns.
 
