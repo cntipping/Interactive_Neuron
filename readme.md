@@ -96,7 +96,7 @@ To stop the local server, click the terminal window and press **Ctrl + C** (also
 ## Study controls
 
 - **Rotate:** Drag the model with the mouse or one finger.
-- **Zoom:** Scroll, pinch on touch screens, or use the + and − buttons.
+- **Zoom:** Point at a feature and scroll to zoom toward it. Touch pinch zooms around the midpoint between your fingers. The + and − buttons zoom around the current view target.
 - **Reset:** Use the circular-arrow button.
 - **Preview a label:** Hold the mouse still over a structure for 0.6 seconds. Moving the cursor dismisses the preview and starts a fresh delay if it is still over a structure.
 - **Pin a label:** Click or tap a structure. Its label stays visible when the cursor moves, and its leader line follows the selected location as you rotate the model.
@@ -151,7 +151,7 @@ Reference: [Nerve Cells — Neuroscience, NCBI Bookshelf](https://www.ncbi.nlm.n
 
 `lib/label-layout.ts` contains the main settings. `LABEL_LAYOUT.gap` is the pixel gap from the projected model edge. Placement compares eight candidates (left, right, above, below, and four diagonals), preferring positions with less overlap and keeping the label inside the HUD margins. On small screens some overlap may remain.
 
-`INITIAL_MODEL_SCREEN_FRACTION = 0.78` controls the starting view only. The previous maximum zoom-size cap is removed: `controls.minDistance = 0` in `app/page.tsx` lets the camera move freely toward the model. Extremely close views can enter or clip through geometry, as in other 3D viewers. Reset returns to the starting view.
+`INITIAL_MODEL_SCREEN_FRACTION = 0.78` controls the starting view only. Close-up limits are configured in `lib/zoom-controls.ts`: `minimumDistance: 3.5` and `surfaceClearance: 0.65`. Cursor and pinch zoom use the built-in `controls.zoomToCursor = true` behavior. A surface check stops zoom-in motion before it passes through the membrane; all zoom methods use the same minimum distance. Reset returns to the starting view.
 
 `popupScale()` in `lib/label-layout.ts` makes the label smaller as you zoom in, down to 75% of its original size. Zooming out restores it. Placement and leader lines use the scaled dimensions, and long pinned labels remain scrollable. `HOVER_DELAY_MS = 600` in `lib/hover-preview.ts` controls the hover delay in milliseconds.
 

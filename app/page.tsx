@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Popover, PopoverContent, PopoverTitle, PopoverDescription, PopoverTrigger } from '@/components/ui/popover';
+import { DETAIL_ZOOM, guardZoomPath } from '../lib/zoom-controls';
 import { buildNeuron } from '../lib/neuron-model';
 import { activePart, labelPosition, initialCameraDistance, popupScale } from '../lib/label-layout';
 import { createHoverPreview, HOVER_DELAY_MS } from '../lib/hover-preview';
@@ -24,13 +25,22 @@ function Neuron({hoverActive,selected,onSelect,onHover,anchor,lockedAnchor,conne
  useEffect(()=>{if(!host.current)return;const el=host.current;let renderer:THREE.WebGLRenderer;try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});}catch{setError(true);return;}
  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
  renderer.setPixelRatio(Math.min(devicePixelRatio,2));el.appendChild(renderer.domElement);renderer.domElement.setAttribute('aria-label','Rotatable 3D neuron. Drag to rotate, scroll to zoom, or select a structure.');
- const scene=new THREE.Scene();const camera=new THREE.PerspectiveCamera(38,1,.01,500);camera.position.set(0,0,23);const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.enablePan=false;controls.minDistance=0;controls.maxDistance=65;controls.target.set(.3,0,0);
+ const scene=new THREE.Scene();const camera=new THREE.PerspectiveCamera(38,1,.01,500);camera.position.set(0,0,23);const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.enablePan=false;controls.zoomToCursor=true;controls.screenSpacePanning=true;controls.zoomSpeed=DETAIL_ZOOM.speed;controls.minDistance=DETAIL_ZOOM.minimumDistance;controls.maxDistance=65;controls.target.set(.3,0,0);
  scene.add(new THREE.HemisphereLight(0xc4e7e2,0x1c171f,1.3));
  const light=new THREE.DirectionalLight(0xffe5cd,3.5);light.position.set(-3,6,8);scene.add(light);
  const rim=new THREE.DirectionalLight(0x8fd3d6,2.4);rim.position.set(3,1,-5);scene.add(rim);
  const fill=new THREE.DirectionalLight(0xc9c5ed,.8);fill.position.set(-5,-3,4);scene.add(fill);
  const model=buildNeuron(parts.map(p=>p.color));const {group,meshes}=model;scene.add(group);
  const modelBox=new THREE.Box3().setFromObject(group);
+ const previousCamera=camera.position.clone();
+ let previousDistance=camera.position.distanceTo(controls.target);
+ const protectCloseup=()=>{
+   const distance=camera.position.distanceTo(controls.target);
+   if(distance<previousDistance-1e-6)guardZoomPath(previousCamera,camera.position,controls.target,meshes);
+   camera.updateMatrixWorld();
+   previousCamera.copy(camera.position);previousDistance=camera.position.distanceTo(controls.target);
+ };
+ controls.addEventListener('change',protectCloseup);
  const sphere=modelBox.getBoundingSphere(new THREE.Sphere());
  const framingRadius=sphere.radius+sphere.center.distanceTo(controls.target);
  const modelCorners:THREE.Vector3[]=[];
@@ -47,7 +57,7 @@ function Neuron({hoverActive,selected,onSelect,onHover,anchor,lockedAnchor,conne
  api.current={reset:()=>{camera.position.set(.3,0,fitDistance);controls.target.set(.3,0,0);controls.update();},zoom:(n)=>{camera.position.sub(controls.target).multiplyScalar(n).clampLength(controls.minDistance,controls.maxDistance).add(controls.target);controls.update();}};
  let fitDistance=23;
  const resize=()=>{const w=el.clientWidth,h=el.clientHeight;if(!w||!h)return;renderer.setSize(w,h);camera.aspect=w/h;const nextFit=initialCameraDistance(framingRadius,camera.fov,camera.aspect)*1.08;
- controls.minDistance=0; // No model-size cap: allow zooming inside the original framing.
+ controls.minDistance=DETAIL_ZOOM.minimumDistance; // Shared by cursor, pinch, and button zoom.
  controls.maxDistance=nextFit*2.5;
  camera.position.sub(controls.target).multiplyScalar(nextFit/fitDistance).clampLength(controls.minDistance,controls.maxDistance).add(controls.target);fitDistance=nextFit;camera.updateProjectionMatrix();};const observer=new ResizeObserver(resize);observer.observe(el);resize();let frame=0;const animate=()=>{frame=requestAnimationFrame(animate);controls.update();meshes.forEach(m=>{const mat=m.material as THREE.MeshStandardMaterial;mat.emissive.set(m.userData.part===selection.current?parts[selection.current ?? 0].color:'#000000');mat.emissiveIntensity=m.userData.part===selection.current?.1:0;});renderer.render(scene,camera);
  const svg=connector.current;const label=popup.current;const chosen=selection.current;
@@ -72,7 +82,7 @@ function Neuron({hoverActive,selected,onSelect,onHover,anchor,lockedAnchor,conne
    svg.querySelector('circle')?.setAttribute('cx',String(x));svg.querySelector('circle')?.setAttribute('cy',String(y));
  }else if(svg){svg.style.visibility='hidden';}
  };animate();
- return()=>{cancelAnimationFrame(frame);hover.dispose();renderer.domElement.removeEventListener('pointerdown',start);renderer.domElement.removeEventListener('pointerup',pick);renderer.domElement.removeEventListener('pointermove',move);renderer.domElement.removeEventListener('pointerleave',leave);renderer.domElement.removeEventListener('pointercancel',leave);renderer.domElement.removeEventListener('wheel',cancel);observer.disconnect();controls.dispose();model.dispose();renderer.dispose();renderer.domElement.remove();api.current=null;};
+ return()=>{cancelAnimationFrame(frame);hover.dispose();renderer.domElement.removeEventListener('pointerdown',start);renderer.domElement.removeEventListener('pointerup',pick);renderer.domElement.removeEventListener('pointermove',move);renderer.domElement.removeEventListener('pointerleave',leave);renderer.domElement.removeEventListener('pointercancel',leave);renderer.domElement.removeEventListener('wheel',cancel);observer.disconnect();controls.removeEventListener('change',protectCloseup);controls.dispose();model.dispose();renderer.dispose();renderer.domElement.remove();api.current=null;};
  },[onSelect,onHover,api,anchor,lockedAnchor,connector,popup]);
  return <div className="canvas" ref={host}>{error&&<p className="render-error">3D rendering is unavailable in this browser. Try a browser with WebGL enabled. You can still explore every structure using the Structure index button in the top-right corner.</p>}</div>;
 }
@@ -91,7 +101,7 @@ export default function Home(){
  return <main>
  <h1 className="hud-name">neuron<span>_01</span></h1>
  <div className="hud-menu"><Popover open={indexOpen} onOpenChange={setIndexOpen}><PopoverTrigger className="index-trigger"><List size={17}/> <span>Structure index</span><span className="menu-count">08</span></PopoverTrigger><PopoverContent align="end" sideOffset={12} className="structure-popup"><div className="menu-heading"><PopoverTitle>Structure index</PopoverTitle><button aria-label="Close structure index" onClick={()=>setIndexOpen(false)}><X size={17}/></button></div><PopoverDescription className="menu-description">Select a structure to pin its anatomy label.</PopoverDescription><div className="parts">{parts.map((part,i)=><button key={part.name} aria-pressed={pinned===i} onClick={()=>{anchor.current=null;pin(i);setIndexOpen(false);}} className={selected===i?'active':''} style={{'--part-color':part.color} as React.CSSProperties}><span className="index">0{i+1}</span><i/>{part.name}<span className="target-indicator">{pinned===i?'+':'⌁'}</span></button>)}</div></PopoverContent></Popover></div>
- <section className={`workspace ${p?'has-label':''}`} aria-label="Interactive neuron study model"><div className="viewer"><Neuron hoverActive={hovered!==null} selected={selected} onSelect={pin} onHover={onHover} anchor={anchor} lockedAnchor={pinnedAnchor} connector={connector} popup={popup} api={api}/><div className="axis-mark" aria-hidden="true">Y +<br/>└── X +</div><div className="viewer-bottom"><span><Move size={16}/> <span>Drag to rotate · Scroll to zoom<br/><small>Hover {HOVER_DELAY_MS / 1000}s to inspect · Click to pin</small></span></span><div className="view-controls"><button aria-label="Zoom in" onClick={()=>api.current?.zoom(.85)}><Plus size={18}/></button><button aria-label="Zoom out" onClick={()=>api.current?.zoom(1.18)}><Minus size={18}/></button><button aria-label="Reset model view" onClick={()=>api.current?.reset()}><RotateCcw size={18}/></button></div></div></div>
+ <section className={`workspace ${p?'has-label':''}`} aria-label="Interactive neuron study model"><div className="viewer"><Neuron hoverActive={hovered!==null} selected={selected} onSelect={pin} onHover={onHover} anchor={anchor} lockedAnchor={pinnedAnchor} connector={connector} popup={popup} api={api}/><div className="axis-mark" aria-hidden="true">Y +<br/>└── X +</div><div className="viewer-bottom"><span><Move size={16}/> <span>Drag to rotate · Scroll toward cursor to zoom<br/><small>Hover {HOVER_DELAY_MS / 1000}s to inspect · Click to pin</small></span></span><div className="view-controls"><button aria-label="Zoom in" onClick={()=>api.current?.zoom(.85)}><Plus size={18}/></button><button aria-label="Zoom out" onClick={()=>api.current?.zoom(1.18)}><Minus size={18}/></button><button aria-label="Reset model view" onClick={()=>api.current?.reset()}><RotateCcw size={18}/></button></div></div></div>
  <svg ref={connector} className="connector" aria-hidden="true" style={{color:p?.color,visibility:'hidden'}}><polyline fill="none" stroke="currentColor" strokeWidth="1.3"/><circle r="5" fill="#041215" stroke="currentColor" strokeWidth="2"/></svg>
  <div className="label-zone" aria-live="polite">{p&&selected!==null?<aside ref={popup} data-preview={!isPinned} className="label-popup" style={{'--accent':p.color} as React.CSSProperties} aria-label={`${p.name} information`}><div className="label-top"><span>{isPinned?<Pin size={14}/>:<Crosshair size={14}/>} {isPinned?'Pinned':'Hover preview'}</span><button onClick={close} aria-label="Close anatomy label"><X size={18}/></button></div><div className="label-id">Structure / 0{selected+1}</div><h2>{p.name}</h2><div className="function-label">{p.verb}</div><p>{p.text}</p><div className="relation"><h3>In the whole neuron</h3><p>{p.whole}</p></div><div className="remember"><span>Field note</span><p>{p.note}</p></div><div className="label-foot">{isPinned?'Hover another structure to explore.':'Click the structure to keep this label.'}</div></aside>:null}</div></section>
  </main>}
