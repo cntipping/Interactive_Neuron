@@ -33,12 +33,16 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build the static site
         run: pnpm build:pages
+      - name: Verify and prepare static output
+        run: |
+          test -f dist/client/index.html
+          touch dist/client/.nojekyll
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload the static site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./out
+          path: ./dist/client
 
   deploy:
     environment:
