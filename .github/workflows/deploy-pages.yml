@@ -39,8 +39,6 @@ jobs:
           touch dist/client/.nojekyll
       - name: Configure Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - name: Upload the static site
         uses: actions/upload-pages-artifact@v3
         with:
