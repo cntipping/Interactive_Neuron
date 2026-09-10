@@ -40,3 +40,13 @@ node --experimental-strip-types --test tests/*.test.mjs
 ```
 
 The site is deployed at https://interactive-neuron-study.qs6bpnpyr8.chatgpt.site.
+
+## GitHub Pages
+
+Push this project to a GitHub repository’s `main` branch. The included GitHub Actions workflow builds and publishes the static site automatically. In the repository, open **Settings → Pages** and set **Source** to **GitHub Actions**. After the workflow finishes, the site will be available at:
+
+```text
+https://YOUR-USERNAME.github.io/YOUR-REPOSITORY/
+```
+
+The workflow uses the repository name automatically, so no code change is needed for the URL path.
