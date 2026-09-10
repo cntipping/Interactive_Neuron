@@ -4,20 +4,22 @@ export const LABEL_LAYOUT = {
   topInset: 86,        // Leave the name and structure menu clear.
   bottomInset: 90,     // Leave rotation and zoom controls clear.
 };
-export const MAX_MODEL_SCREEN_FRACTION = 0.78;
+export const INITIAL_MODEL_SCREEN_FRACTION = 0.90;
 
 export function activePart(hovered:number|null,pinned:number|null){return hovered ?? pinned;}
 export type ModelBounds = {left:number;top:number;right:number;bottom:number};
 
-/** Minimum camera distance: the model's bounding sphere fits within 78% of the tighter viewport dimension. */
-export function minimumCameraDistance(radius:number,verticalFovDegrees:number,aspect:number){
+/** Initial framing only; this does not limit zoom. */
+export function initialCameraDistance(radius:number,verticalFovDegrees:number,aspect:number){
   const halfFov=verticalFovDegrees*Math.PI/360;
-  const usableHalfAngle=Math.atan(Math.tan(halfFov)*Math.min(1,aspect)*MAX_MODEL_SCREEN_FRACTION);
+  const usableHalfAngle=Math.atan(Math.tan(halfFov)*Math.min(1,aspect)*INITIAL_MODEL_SCREEN_FRACTION);
   return radius/Math.sin(usableHalfAngle);
 }
 
 /** Compare eight outward positions around the projected model, then choose the clearest on-screen label. */
 export function labelPosition(x:number,y:number,width:number,height:number,labelWidth:number,labelHeight:number,model?:ModelBounds){
+  x=Number.isFinite(x)?x:width/2;
+  y=Number.isFinite(y)?y:height/2;
   const {gap,margin,topInset,bottomInset}=LABEL_LAYOUT;
   const clamp=(v:number,min:number,max:number)=>Math.max(min,Math.min(v,Math.max(min,max)));
   const b=model??{left:x-8,top:y-8,right:x+8,bottom:y+8};
@@ -48,4 +50,9 @@ export function labelPosition(x:number,y:number,width:number,height:number,label
   });
   candidates.sort((a,b)=>a.score-b.score);
   return candidates[0];
+}
+
+/** Shrink the label as the camera approaches; keep it at least 75% for legibility. */
+export function popupScale(cameraDistance:number,initialDistance:number){
+  return Math.max(0.75, Math.min(1, Math.pow(cameraDistance/initialDistance, 0.35)));
 }

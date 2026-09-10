@@ -2,8 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Popover, PopoverContent, PopoverTitle, PopoverDescription, PopoverTrigger } from '@/components/ui/popover';
 import { buildNeuron } from '../lib/neuron-model';
-import { activePart, labelPosition, minimumCameraDistance } from '../lib/label-layout';
-import { createHoverPreview } from '../lib/hover-preview';
+import { activePart, labelPosition, initialCameraDistance, popupScale } from '../lib/label-layout';
+import { createHoverPreview, HOVER_DELAY_MS } from '../lib/hover-preview';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RotateCcw, Plus, Minus, Move, List, Crosshair, Pin, X } from 'lucide-react';
@@ -24,7 +24,7 @@ function Neuron({hoverActive,selected,onSelect,onHover,anchor,lockedAnchor,conne
  useEffect(()=>{if(!host.current)return;const el=host.current;let renderer:THREE.WebGLRenderer;try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});}catch{setError(true);return;}
  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
  renderer.setPixelRatio(Math.min(devicePixelRatio,2));el.appendChild(renderer.domElement);renderer.domElement.setAttribute('aria-label','Rotatable 3D neuron. Drag to rotate, scroll to zoom, or select a structure.');
- const scene=new THREE.Scene();const camera=new THREE.PerspectiveCamera(38,1,.1,500);camera.position.set(0,0,23);const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.enablePan=false;controls.minDistance=12;controls.maxDistance=65;controls.target.set(.3,0,0);
+ const scene=new THREE.Scene();const camera=new THREE.PerspectiveCamera(38,1,.01,500);camera.position.set(0,0,23);const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.enablePan=false;controls.minDistance=0;controls.maxDistance=65;controls.target.set(.3,0,0);
  scene.add(new THREE.HemisphereLight(0xc4e7e2,0x1c171f,1.3));
  const light=new THREE.DirectionalLight(0xffe5cd,3.5);light.position.set(-3,6,8);scene.add(light);
  const rim=new THREE.DirectionalLight(0x8fd3d6,2.4);rim.position.set(3,1,-5);scene.add(rim);
@@ -46,9 +46,10 @@ function Neuron({hoverActive,selected,onSelect,onHover,anchor,lockedAnchor,conne
  renderer.domElement.addEventListener('pointerdown',start);renderer.domElement.addEventListener('pointerup',pick);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerleave',leave);renderer.domElement.addEventListener('pointercancel',leave);renderer.domElement.addEventListener('wheel',cancel);
  api.current={reset:()=>{camera.position.set(.3,0,fitDistance);controls.target.set(.3,0,0);controls.update();},zoom:(n)=>{camera.position.sub(controls.target).multiplyScalar(n).clampLength(controls.minDistance,controls.maxDistance).add(controls.target);controls.update();}};
  let fitDistance=23;
- const resize=()=>{const w=el.clientWidth,h=el.clientHeight;if(!w||!h)return;renderer.setSize(w,h);camera.aspect=w/h;controls.minDistance=minimumCameraDistance(framingRadius,camera.fov,camera.aspect);
- controls.maxDistance=controls.minDistance*2.5;
- const nextFit=controls.minDistance*1.08;camera.position.sub(controls.target).multiplyScalar(nextFit/fitDistance).clampLength(controls.minDistance,controls.maxDistance).add(controls.target);fitDistance=nextFit;camera.updateProjectionMatrix();};const observer=new ResizeObserver(resize);observer.observe(el);resize();let frame=0;const animate=()=>{frame=requestAnimationFrame(animate);controls.update();meshes.forEach(m=>{const mat=m.material as THREE.MeshStandardMaterial;mat.emissive.set(m.userData.part===selection.current?parts[selection.current ?? 0].color:'#000000');mat.emissiveIntensity=m.userData.part===selection.current?.1:0;});renderer.render(scene,camera);
+ const resize=()=>{const w=el.clientWidth,h=el.clientHeight;if(!w||!h)return;renderer.setSize(w,h);camera.aspect=w/h;const nextFit=initialCameraDistance(framingRadius,camera.fov,camera.aspect)*1.08;
+ controls.minDistance=0; // No model-size cap: allow zooming inside the original framing.
+ controls.maxDistance=nextFit*2.5;
+ camera.position.sub(controls.target).multiplyScalar(nextFit/fitDistance).clampLength(controls.minDistance,controls.maxDistance).add(controls.target);fitDistance=nextFit;camera.updateProjectionMatrix();};const observer=new ResizeObserver(resize);observer.observe(el);resize();let frame=0;const animate=()=>{frame=requestAnimationFrame(animate);controls.update();meshes.forEach(m=>{const mat=m.material as THREE.MeshStandardMaterial;mat.emissive.set(m.userData.part===selection.current?parts[selection.current ?? 0].color:'#000000');mat.emissiveIntensity=m.userData.part===selection.current?.1:0;});renderer.render(scene,camera);
  const svg=connector.current;const label=popup.current;const chosen=selection.current;
  if(svg&&label&&chosen!==null){
    const defaults=[[-4.7,1.4,0],[-3,0,.8],[-3,.04,.64],[-1.65,-.35,0],[4.85,-.9,.1],[1.7,-.65,.15],[1.2,-.58,.02],[6.3,-1,.2]];
@@ -57,9 +58,13 @@ function Neuron({hoverActive,selected,onSelect,onHover,anchor,lockedAnchor,conne
    point.applyMatrix4(group.matrixWorld).project(camera);
    const bounds=el.getBoundingClientRect(), root=svg.getBoundingClientRect();
    const x=(point.x+1)/2*bounds.width+bounds.left-root.left, y=(1-point.y)/2*bounds.height+bounds.top-root.top;
-   const projected=modelCorners.map(c=>c.clone().project(camera));
+   const frontCorners=modelCorners.filter(c=>c.clone().applyMatrix4(camera.matrixWorldInverse).z < -camera.near);
+   const projected=frontCorners.length?frontCorners.map(c=>c.clone().project(camera)):[new THREE.Vector3(-1,1,0),new THREE.Vector3(1,-1,0)];
    const projectedBounds={left:Math.min(...projected.map(c=>(c.x+1)/2*bounds.width)),right:Math.max(...projected.map(c=>(c.x+1)/2*bounds.width)),top:Math.min(...projected.map(c=>(1-c.y)/2*bounds.height)),bottom:Math.max(...projected.map(c=>(1-c.y)/2*bounds.height))};
-   const placement=labelPosition(x,y,bounds.width,bounds.height,label.offsetWidth,label.offsetHeight,projectedBounds);
+   const scale=popupScale(camera.position.distanceTo(controls.target),fitDistance);
+   label.style.transform=`scale(${scale})`;
+   label.style.transformOrigin='top left';
+   const placement=labelPosition(x,y,bounds.width,bounds.height,label.offsetWidth*scale,label.offsetHeight*scale,projectedBounds);
    label.style.left=`${placement.left}px`;label.style.top=`${placement.top}px`;
    const visible=point.z>-1&&point.z<1&&x>=0&&x<=bounds.width&&y>=0&&y<=bounds.height;
    svg.style.visibility=visible?'visible':'hidden';
@@ -86,7 +91,7 @@ export default function Home(){
  return <main>
  <h1 className="hud-name">neuron<span>_01</span></h1>
  <div className="hud-menu"><Popover open={indexOpen} onOpenChange={setIndexOpen}><PopoverTrigger className="index-trigger"><List size={17}/> <span>Structure index</span><span className="menu-count">08</span></PopoverTrigger><PopoverContent align="end" sideOffset={12} className="structure-popup"><div className="menu-heading"><PopoverTitle>Structure index</PopoverTitle><button aria-label="Close structure index" onClick={()=>setIndexOpen(false)}><X size={17}/></button></div><PopoverDescription className="menu-description">Select a structure to pin its anatomy label.</PopoverDescription><div className="parts">{parts.map((part,i)=><button key={part.name} aria-pressed={pinned===i} onClick={()=>{anchor.current=null;pin(i);setIndexOpen(false);}} className={selected===i?'active':''} style={{'--part-color':part.color} as React.CSSProperties}><span className="index">0{i+1}</span><i/>{part.name}<span className="target-indicator">{pinned===i?'+':'⌁'}</span></button>)}</div></PopoverContent></Popover></div>
- <section className={`workspace ${p?'has-label':''}`} aria-label="Interactive neuron study model"><div className="viewer"><Neuron hoverActive={hovered!==null} selected={selected} onSelect={pin} onHover={onHover} anchor={anchor} lockedAnchor={pinnedAnchor} connector={connector} popup={popup} api={api}/><div className="axis-mark" aria-hidden="true">Y +<br/>└── X +</div><div className="viewer-bottom"><span><Move size={16}/> <span>Drag to rotate · Scroll to zoom<br/><small>Hover 1.5s to inspect · Click to pin</small></span></span><div className="view-controls"><button aria-label="Zoom in" onClick={()=>api.current?.zoom(.85)}><Plus size={18}/></button><button aria-label="Zoom out" onClick={()=>api.current?.zoom(1.18)}><Minus size={18}/></button><button aria-label="Reset model view" onClick={()=>api.current?.reset()}><RotateCcw size={18}/></button></div></div></div>
+ <section className={`workspace ${p?'has-label':''}`} aria-label="Interactive neuron study model"><div className="viewer"><Neuron hoverActive={hovered!==null} selected={selected} onSelect={pin} onHover={onHover} anchor={anchor} lockedAnchor={pinnedAnchor} connector={connector} popup={popup} api={api}/><div className="axis-mark" aria-hidden="true">Y +<br/>└── X +</div><div className="viewer-bottom"><span><Move size={16}/> <span>Drag to rotate · Scroll to zoom<br/><small>Hover {HOVER_DELAY_MS / 1000}s to inspect · Click to pin</small></span></span><div className="view-controls"><button aria-label="Zoom in" onClick={()=>api.current?.zoom(.85)}><Plus size={18}/></button><button aria-label="Zoom out" onClick={()=>api.current?.zoom(1.18)}><Minus size={18}/></button><button aria-label="Reset model view" onClick={()=>api.current?.reset()}><RotateCcw size={18}/></button></div></div></div>
  <svg ref={connector} className="connector" aria-hidden="true" style={{color:p?.color,visibility:'hidden'}}><polyline fill="none" stroke="currentColor" strokeWidth="1.3"/><circle r="5" fill="#041215" stroke="currentColor" strokeWidth="2"/></svg>
  <div className="label-zone" aria-live="polite">{p&&selected!==null?<aside ref={popup} data-preview={!isPinned} className="label-popup" style={{'--accent':p.color} as React.CSSProperties} aria-label={`${p.name} information`}><div className="label-top"><span>{isPinned?<Pin size={14}/>:<Crosshair size={14}/>} {isPinned?'Pinned':'Hover preview'}</span><button onClick={close} aria-label="Close anatomy label"><X size={18}/></button></div><div className="label-id">Structure / 0{selected+1}</div><h2>{p.name}</h2><div className="function-label">{p.verb}</div><p>{p.text}</p><div className="relation"><h3>In the whole neuron</h3><p>{p.whole}</p></div><div className="remember"><span>Field note</span><p>{p.note}</p></div><div className="label-foot">{isPinned?'Hover another structure to explore.':'Click the structure to keep this label.'}</div></aside>:null}</div></section>
  </main>}

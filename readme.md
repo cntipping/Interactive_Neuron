@@ -98,7 +98,7 @@ To stop the local server, click the terminal window and press **Ctrl + C** (also
 - **Rotate:** Drag the model with the mouse or one finger.
 - **Zoom:** Scroll, pinch on touch screens, or use the + and − buttons.
 - **Reset:** Use the circular-arrow button.
-- **Preview a label:** Hold the mouse still over a structure for 1.5 seconds. Moving the cursor dismisses the preview and starts a fresh delay if it is still over a structure.
+- **Preview a label:** Hold the mouse still over a structure for 0.6 seconds. Moving the cursor dismisses the preview and starts a fresh delay if it is still over a structure.
 - **Pin a label:** Click or tap a structure. Its label stays visible when the cursor moves, and its leader line follows the selected location as you rotate the model.
 - **Change target:** Click another structure, or open **Structure index** in the top-right corner and select its name. The menu closes after selection. Hover previews take priority over a pinned label. When the hover ends, the last clicked label returns.
 - **Close a label:** Click its X button or press Escape.
@@ -151,6 +151,8 @@ Reference: [Nerve Cells — Neuroscience, NCBI Bookshelf](https://www.ncbi.nlm.n
 
 `lib/label-layout.ts` contains the main settings. `LABEL_LAYOUT.gap` is the pixel gap from the projected model edge. Placement compares eight candidates (left, right, above, below, and four diagonals), preferring positions with less overlap and keeping the label inside the HUD margins. On small screens some overlap may remain.
 
-`MAX_MODEL_SCREEN_FRACTION = 0.78` limits the model's bounding sphere to 78% of the tighter viewport dimension at maximum zoom. Raising it permits a larger model; lowering it leaves more surrounding space. `minimumCameraDistance()` accounts for the camera field of view and screen aspect ratio. In `app/page.tsx`, both the scroll/pinch controls and the +/− buttons use this same minimum distance. Resizing recalculates it.
+`INITIAL_MODEL_SCREEN_FRACTION = 0.78` controls the starting view only. The previous maximum zoom-size cap is removed: `controls.minDistance = 0` in `app/page.tsx` lets the camera move freely toward the model. Extremely close views can enter or clip through geometry, as in other 3D viewers. Reset returns to the starting view.
+
+`popupScale()` in `lib/label-layout.ts` makes the label smaller as you zoom in, down to 75% of its original size. Zooming out restores it. Placement and leader lines use the scaled dimensions, and long pinned labels remain scrollable. `HOVER_DELAY_MS = 600` in `lib/hover-preview.ts` controls the hover delay in milliseconds.
 
 The compact-label rules at the end of `app/globals.css` set the popup width to 300px and maximum height to 380px (smaller when required by the screen). Longer text scrolls inside a pinned popup. Main paragraph text stays at 16px.

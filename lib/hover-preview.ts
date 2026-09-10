@@ -1,5 +1,7 @@
-/** A still cursor previews after 1.5 seconds; movement cancels and restarts. */
-export function createHoverPreview(show: (part: number | null) => void, delay = 1500) {
+export const HOVER_DELAY_MS = 600;
+
+/** A still cursor previews after 600 ms; movement cancels and restarts. */
+export function createHoverPreview(show: (part: number | null) => void, delay = HOVER_DELAY_MS) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   return {
     cancel() { clearTimeout(timer); timer = undefined; show(null); },
