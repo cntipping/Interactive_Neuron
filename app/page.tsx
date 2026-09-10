@@ -20,6 +20,9 @@ const parts = [
  {name:'Axon terminals',color:'#b39fe8',verb:'Transmit',text:'Terminal branches form connections with target cells. At chemical synapses, an arriving action potential triggers calcium entry and neurotransmitter release.',whole:'Neurotransmitters cross the synaptic cleft and bind receptors on the next cell, influencing its activity.',note:'A synapse includes the terminal, the cleft, and the receiving cell’s specialization.'},
 ];
 type Anchor = {part:number; point:THREE.Vector3};
+// The GitHub Pages build is a static export. Explicitly mark this client-heavy
+// route as static so Vinext emits the prerendered HTML entry point.
+export const dynamic = 'force-static';
 function Neuron({hoverActive,selected,onSelect,onHover,anchor,lockedAnchor,connector,popup,api}:{hoverActive:boolean;selected:number|null;onSelect:(n:number)=>void;onHover:(n:number|null)=>void;anchor:React.MutableRefObject<Anchor|null>;lockedAnchor:React.MutableRefObject<Anchor|null>;connector:React.RefObject<SVGSVGElement|null>;popup:React.RefObject<HTMLElement|null>;api:React.MutableRefObject<{reset:()=>void;zoom:(n:number)=>void}|null>}) {
  const host=useRef<HTMLDivElement>(null);const selection=useRef(selected);selection.current=selected;const hovering=useRef(hoverActive);hovering.current=hoverActive; const [error,setError]=useState(false);
  useEffect(()=>{if(!host.current)return;const el=host.current;let renderer:THREE.WebGLRenderer;try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});}catch{setError(true);return;}
