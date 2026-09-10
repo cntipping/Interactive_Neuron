@@ -43,8 +43,15 @@ export default defineConfig(async () => {
 
   // Wrangler snapshots its log path while the Cloudflare plugin is imported.
   const { cloudflare } = await import('@cloudflare/vite-plugin');
+  const repositoryName = process.env.GITHUB_REPOSITORY?.split('/')[1] ?? '';
+  const pagesBase = process.env.GITHUB_ACTIONS === 'true' && repositoryName
+    ? `/${repositoryName}/`
+    : '/';
 
   return {
+    // GitHub project Pages serves the site below /<repository>/; keep all
+    // generated JS/CSS URLs inside that subpath.
+    base: pagesBase,
     css: { postcss: { plugins: [tailwindcss()] } },
     server: isCodexSeatbeltSandbox
       ? { watch: { useFsEvents: false, usePolling: true } }
