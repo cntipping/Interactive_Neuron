@@ -1,6 +1,6 @@
 # The Interactive Neuron
 
-Original Idea: A 3d model of a neuron where the user can interact with it to change it's position and viewpoint, zoom into the model for more detail or out for less detail, and click on specific parts of the neuron to learn about its functionality. This webpage will be used by psychology students to study and better understand the anatomy and functionality of individual neurons.
+Original Idea: A 3d model of a neuron where the user can interact with it to change its position and viewpoint, zoom into the model for more detail or out for less detail, and click on specific parts of the neuron to learn about its functionality. This webpage will be used by psychology students to study and better understand the anatomy and functionality of individual neurons.
 
 ## Open as a Github Page
 Open the following link in your preferred browser:
